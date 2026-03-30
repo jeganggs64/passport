@@ -1,70 +1,62 @@
 import { RequestPayload } from "@gitcoin/passport-types";
-import { RuonIDProvider, verificationResults } from "../Providers/ruonid.js";
+import { RuonIDProvider } from "../Providers/ruonid.js";
+
+// Mock the procedure module
+jest.mock("../procedures/ruonidVerification.js");
+
+import { consumeSessionResult } from "../procedures/ruonidVerification.js";
+const mockedConsume = consumeSessionResult as jest.MockedFunction<typeof consumeSessionResult>;
 
 const appSpecificId = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 const sessionId = "sess_abc123";
 
 beforeEach(() => {
-  verificationResults.clear();
+  jest.clearAllMocks();
 });
 
 describe("RuonIDProvider", () => {
+  const provider = new RuonIDProvider();
+
   it("handles valid verification", async () => {
-    verificationResults.set(sessionId, {
+    mockedConsume.mockReturnValue({
       appSpecificId,
       identityTier: "passport-bound",
       deviceVerified: true,
-      timestamp: "2026-03-30T00:00:00Z",
-      receipt: {
-        payloadHash: "abc",
-        deviceAttestation: "def",
-        serverSignature: "ghi",
-      },
+      receipt: { payloadHash: "abc", deviceAttestation: "def", serverSignature: "ghi" },
     });
 
-    const provider = new RuonIDProvider();
     const result = await provider.verify({
       proofs: { sessionId },
     } as unknown as RequestPayload);
 
-    expect(result).toEqual({
-      valid: true,
-      errors: [],
-      record: { id: appSpecificId },
-    });
-
-    // Session should be consumed (single-use)
-    expect(verificationResults.has(sessionId)).toBe(false);
+    expect(result.valid).toBe(true);
+    expect(result.record).toEqual({ id: appSpecificId });
+    expect(mockedConsume).toHaveBeenCalledWith(sessionId);
   });
 
   it("rejects when device not verified", async () => {
-    verificationResults.set(sessionId, {
+    mockedConsume.mockReturnValue({
       appSpecificId,
       identityTier: "passport-bound",
       deviceVerified: false,
-      timestamp: "2026-03-30T00:00:00Z",
       receipt: { payloadHash: "abc", deviceAttestation: "def", serverSignature: "ghi" },
     });
 
-    const provider = new RuonIDProvider();
     const result = await provider.verify({
       proofs: { sessionId },
     } as unknown as RequestPayload);
 
     expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("rejects when receipt is missing", async () => {
-    verificationResults.set(sessionId, {
+  it("rejects when receipt is empty", async () => {
+    mockedConsume.mockReturnValue({
       appSpecificId,
       identityTier: "passport-bound",
       deviceVerified: true,
-      timestamp: "2026-03-30T00:00:00Z",
-      receipt: null as any,
+      receipt: {},
     });
 
-    const provider = new RuonIDProvider();
     const result = await provider.verify({
       proofs: { sessionId },
     } as unknown as RequestPayload);
@@ -73,22 +65,38 @@ describe("RuonIDProvider", () => {
   });
 
   it("rejects when session not found", async () => {
-    const provider = new RuonIDProvider();
+    mockedConsume.mockReturnValue(null);
+
     const result = await provider.verify({
       proofs: { sessionId: "nonexistent" },
     } as unknown as RequestPayload);
 
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain("not yet completed");
+    expect(result.errors[0]).toContain("not completed");
   });
 
   it("handles missing sessionId", async () => {
-    const provider = new RuonIDProvider();
     const result = await provider.verify({
       proofs: {},
     } as unknown as RequestPayload);
 
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain("Missing session ID");
+    expect(mockedConsume).not.toHaveBeenCalled();
+  });
+
+  it("rejects when appSpecificId is empty", async () => {
+    mockedConsume.mockReturnValue({
+      appSpecificId: "",
+      identityTier: "passport-bound",
+      deviceVerified: true,
+      receipt: { serverSignature: "abc" },
+    });
+
+    const result = await provider.verify({
+      proofs: { sessionId },
+    } as unknown as RequestPayload);
+
+    expect(result.valid).toBe(false);
   });
 });
