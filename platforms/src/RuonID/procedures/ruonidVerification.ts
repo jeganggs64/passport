@@ -36,18 +36,19 @@ const pendingSessions = new Map<string, SessionEntry>();
 export const createSession = (
   frontendRedirect: string,
   iamBaseUrl: string,
-): { qrUrl: string; sessionId: string } => {
+): { qrUrl: string; universalLink: string; sessionId: string } => {
   const client = getClient();
   const callbackUrl = `${iamBaseUrl}/procedure/ruonid/callback`;
   const session = client.createVerifySession(callbackUrl);
-  const qrUrl = RuonID.toUniversalLink(session);
+  const qrUrl = RuonID.toDeepLink(session);
+  const universalLink = RuonID.toUniversalLink(session);
 
   pendingSessions.set(session.sessionId, { frontendRedirect });
 
   // Auto-expire after 5 minutes
   setTimeout(() => pendingSessions.delete(session.sessionId), 5 * 60 * 1000);
 
-  return { qrUrl, sessionId: session.sessionId };
+  return { qrUrl, universalLink, sessionId: session.sessionId };
 };
 
 /**

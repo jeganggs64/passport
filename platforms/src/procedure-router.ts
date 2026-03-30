@@ -178,10 +178,10 @@ router.post("/ruonid/connect", (req: Request, res: Response): void => {
 
   try {
     const iamBaseUrl = (process.env.IAM_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-    const { qrUrl, sessionId } = ruonidCreateSession(body.callback, iamBaseUrl);
+    const { qrUrl, universalLink, sessionId } = ruonidCreateSession(body.callback, iamBaseUrl);
 
     // Return the QR page URL (served by this router) and sessionId
-    const qrPageUrl = `${iamBaseUrl}/procedure/ruonid/qr?sessionId=${encodeURIComponent(sessionId)}&qrUrl=${encodeURIComponent(qrUrl)}`;
+    const qrPageUrl = `${iamBaseUrl}/procedure/ruonid/qr?sessionId=${encodeURIComponent(sessionId)}&qrUrl=${encodeURIComponent(qrUrl)}&universalLink=${encodeURIComponent(universalLink)}`;
 
     res.status(200).send({ qrPageUrl, sessionId });
   } catch (error) {
@@ -192,6 +192,7 @@ router.post("/ruonid/connect", (req: Request, res: Response): void => {
 // Step 2: Serve the QR code page (displayed in the popup)
 router.get("/ruonid/qr", (req: Request, res: Response): void => {
   const qrUrl = req.query.qrUrl as string;
+  const universalLink = (req.query.universalLink as string) || qrUrl;
   const sessionId = req.query.sessionId as string;
 
   if (!qrUrl || !sessionId) {
@@ -265,7 +266,7 @@ router.get("/ruonid/qr", (req: Request, res: Response): void => {
   <div id="qr-container">
     <canvas id="qr-canvas"></canvas>
   </div>
-  <a class="open-link" href="${qrUrl.replace(/"/g, "&quot;")}">Open in RuonID</a>
+  <a class="open-link" href="${universalLink.replace(/"/g, "&quot;")}">Open in RuonID</a>
   <div class="waiting">
     <div class="spinner"></div>
     Waiting for verification...
