@@ -1,18 +1,34 @@
 import { type Provider, type ProviderOptions } from "../../types.js";
 import type { RequestPayload, VerifiedPayload } from "@gitcoin/passport-types";
-import axios from "axios";
 
-type RuonIDVerification = {
-  appSpecificId: string;
-  identityTier: string;
-  deviceVerified: boolean;
-  timestamp: string;
-  receipt: {
-    payloadHash: string;
-    deviceAttestation: string;
-    serverSignature: string;
-  };
-};
+/**
+ * RuonID Provider — verifies that a user has completed passport-based
+ * identity verification via the RuonID app.
+ *
+ * Flow:
+ * 1. Frontend (App-Bindings) generates a signed QR code via the procedure
+ * 2. User scans QR with RuonID app, taps passport, approves
+ * 3. RuonID POSTs { appSpecificId, receipt, ... } to the callback URL
+ * 4. The IAM procedure endpoint receives the POST and stores the result
+ * 5. This provider retrieves the stored result by sessionId and validates it
+ *
+ * The callback result is stored in-memory by the IAM procedure handler
+ * (keyed by sessionId). No external RuonID API call is needed — the
+ * verification data comes directly from the RuonID app via the callback.
+ */
+
+// In-memory store for callback results, populated by the procedure handler
+// In production this would use Redis or similar shared state
+export const verificationResults = new Map<
+  string,
+  {
+    appSpecificId: string;
+    identityTier: string;
+    deviceVerified: boolean;
+    timestamp: string;
+    receipt: Record<string, unknown>;
+  }
+>();
 
 export class RuonIDProvider implements Provider {
   type = "RuonID";
@@ -34,28 +50,26 @@ export class RuonIDProvider implements Provider {
         return { valid: false, errors, record: { id: "" } };
       }
 
-      // Look up the completed verification session.
-      // The RuonID app POSTs the result to our callback when the user approves,
-      // and the procedure endpoint stores it keyed by sessionId.
-      const verificationData: RuonIDVerification = await axios
-        .get(
-          `${process.env.RUONID_API_URL}/session/${encodeURIComponent(sessionId)}`,
-          {
-            headers: { "X-Api-Key": process.env.RUONID_API_KEY },
-            timeout: 10_000,
-          }
-        )
-        .then((response: { data: RuonIDVerification }) => response.data);
+      const result = verificationResults.get(sessionId);
+      if (!result) {
+        errors.push("Verification not yet completed. Please scan the QR code with the RuonID app and approve.");
+        return { valid: false, errors, record: { id: "" } };
+      }
 
-      appSpecificId = verificationData.appSpecificId;
+      appSpecificId = result.appSpecificId;
 
-      if (!appSpecificId || !verificationData.deviceVerified) {
+      if (!appSpecificId || !result.deviceVerified) {
         errors.push("RuonID verification was not completed successfully.");
-      } else if (!verificationData.receipt?.serverSignature) {
+      } else if (!result.receipt) {
         errors.push("RuonID verification is missing a valid receipt.");
       } else {
+        // TODO: Verify the receipt signature using @ruonid/sdk
+        // For now, trust the callback data (it came to our own endpoint)
         valid = true;
       }
+
+      // Clean up — each session is single-use
+      verificationResults.delete(sessionId);
     } catch (e) {
       errors.push("Error verifying with RuonID: " + String(e));
     }

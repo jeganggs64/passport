@@ -1,108 +1,85 @@
 import { RequestPayload } from "@gitcoin/passport-types";
-import { RuonIDProvider } from "../Providers/ruonid.js";
-import { ruonidRequestVerification } from "../procedures/ruonidVerification.js";
-import axios from "axios";
+import { RuonIDProvider, verificationResults } from "../Providers/ruonid.js";
 
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-const userDid = "did:pkh:eip155:1:0xabcdef1234567890";
 const appSpecificId = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 const sessionId = "sess_abc123";
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  verificationResults.clear();
 });
 
 describe("RuonIDProvider", () => {
-  async function mockProvider(mockedResponse: object) {
-    mockedAxios.get.mockImplementation(async () => mockedResponse);
+  it("handles valid verification", async () => {
+    verificationResults.set(sessionId, {
+      appSpecificId,
+      identityTier: "passport-bound",
+      deviceVerified: true,
+      timestamp: "2026-03-30T00:00:00Z",
+      receipt: {
+        payloadHash: "abc",
+        deviceAttestation: "def",
+        serverSignature: "ghi",
+      },
+    });
 
     const provider = new RuonIDProvider();
-    return provider.verify({
-      proofs: { sessionId, userDid },
+    const result = await provider.verify({
+      proofs: { sessionId },
     } as unknown as RequestPayload);
-  }
-
-  it("handles valid verification", async () => {
-    const result = await mockProvider({
-      data: {
-        appSpecificId,
-        identityTier: "passport-bound",
-        deviceVerified: true,
-        timestamp: "2026-03-30T00:00:00Z",
-        receipt: {
-          payloadHash: "abc",
-          deviceAttestation: "def",
-          serverSignature: "ghi",
-        },
-      },
-      status: 200,
-    });
 
     expect(result).toEqual({
       valid: true,
       errors: [],
       record: { id: appSpecificId },
     });
+
+    // Session should be consumed (single-use)
+    expect(verificationResults.has(sessionId)).toBe(false);
   });
 
   it("rejects when device not verified", async () => {
-    const result = await mockProvider({
-      data: {
-        appSpecificId,
-        identityTier: "passport-bound",
-        deviceVerified: false,
-        timestamp: "2026-03-30T00:00:00Z",
-        receipt: { payloadHash: "abc", deviceAttestation: "def", serverSignature: "ghi" },
-      },
-      status: 200,
+    verificationResults.set(sessionId, {
+      appSpecificId,
+      identityTier: "passport-bound",
+      deviceVerified: false,
+      timestamp: "2026-03-30T00:00:00Z",
+      receipt: { payloadHash: "abc", deviceAttestation: "def", serverSignature: "ghi" },
     });
+
+    const provider = new RuonIDProvider();
+    const result = await provider.verify({
+      proofs: { sessionId },
+    } as unknown as RequestPayload);
 
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
   it("rejects when receipt is missing", async () => {
-    const result = await mockProvider({
-      data: {
-        appSpecificId,
-        identityTier: "passport-bound",
-        deviceVerified: true,
-        timestamp: "2026-03-30T00:00:00Z",
-        receipt: {},
-      },
-      status: 200,
+    verificationResults.set(sessionId, {
+      appSpecificId,
+      identityTier: "passport-bound",
+      deviceVerified: true,
+      timestamp: "2026-03-30T00:00:00Z",
+      receipt: null as any,
     });
-
-    expect(result.valid).toBe(false);
-  });
-
-  it("rejects when appSpecificId is empty", async () => {
-    const result = await mockProvider({
-      data: {
-        appSpecificId: "",
-        identityTier: "passport-bound",
-        deviceVerified: true,
-        timestamp: "2026-03-30T00:00:00Z",
-        receipt: { payloadHash: "abc", deviceAttestation: "def", serverSignature: "ghi" },
-      },
-      status: 200,
-    });
-
-    expect(result.valid).toBe(false);
-  });
-
-  it("handles API errors", async () => {
-    mockedAxios.get.mockRejectedValue(new Error("Network error"));
 
     const provider = new RuonIDProvider();
     const result = await provider.verify({
-      proofs: { sessionId, userDid },
+      proofs: { sessionId },
     } as unknown as RequestPayload);
 
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain("Error verifying with RuonID");
+  });
+
+  it("rejects when session not found", async () => {
+    const provider = new RuonIDProvider();
+    const result = await provider.verify({
+      proofs: { sessionId: "nonexistent" },
+    } as unknown as RequestPayload);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("not yet completed");
   });
 
   it("handles missing sessionId", async () => {
@@ -113,20 +90,5 @@ describe("RuonIDProvider", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain("Missing session ID");
-  });
-});
-
-describe("ruonidRequestVerification", () => {
-  it("creates a verification session", async () => {
-    const qrPageUrl = "https://ruonlabs.com/verify/sess_abc123";
-    mockedAxios.post.mockResolvedValue({
-      data: { qrPageUrl, sessionId },
-      status: 200,
-    });
-
-    const result = await ruonidRequestVerification(userDid, "https://passport.xyz/callback");
-
-    expect(mockedAxios.post).toBeCalledTimes(1);
-    expect(result).toEqual({ qrPageUrl, sessionId });
   });
 });

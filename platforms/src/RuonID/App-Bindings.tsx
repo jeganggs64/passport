@@ -54,8 +54,11 @@ export class RuonIDPlatform extends Platform {
     }
 
     try {
-      // Request a verification session from the RuonID procedure endpoint.
-      // This creates a signed QR code session and returns the URL to display it.
+      // Call the IAM procedure endpoint which:
+      // 1. Generates a signed QR payload using our developer keypair
+      // 2. Returns a page URL that displays the QR code
+      // 3. Waits for the RuonID app to POST the result to the callback
+      // 4. Redirects back to Passport when verification completes
       const { qrPageUrl, sessionId } = (
         await axios.post(`${process.env.NEXT_PUBLIC_PASSPORT_PROCEDURE_URL?.replace(/\/*?$/, "")}/ruonid/connect`, {
           callback: `${this.redirectUri}?error=false&code=null&state=${appContext.state}`,
@@ -63,10 +66,8 @@ export class RuonIDPlatform extends Platform {
         })
       ).data as { qrPageUrl: string; sessionId: string };
 
-      // Redirect the popup to show the QR code for the user to scan with RuonID
       windowReference.location = qrPageUrl;
 
-      // Wait for the user to complete verification and redirect back
       const response = await appContext.waitForRedirect(this);
 
       return {
