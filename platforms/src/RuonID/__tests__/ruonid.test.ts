@@ -1,10 +1,12 @@
 import { RequestPayload } from "@gitcoin/passport-types";
-import { RuonIDProvider } from "../Providers/ruonid.js";
+import { RuonIDProvider } from "../Providers/ruonid";
 
 // Mock the procedure module
-jest.mock("../procedures/ruonidVerification.js");
+jest.mock("../procedures/ruonidVerification", () => ({
+  consumeSessionResult: jest.fn(),
+}));
 
-import { consumeSessionResult } from "../procedures/ruonidVerification.js";
+import { consumeSessionResult } from "../procedures/ruonidVerification";
 const mockedConsume = consumeSessionResult as jest.MockedFunction<typeof consumeSessionResult>;
 
 const appSpecificId = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
