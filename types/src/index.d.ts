@@ -366,7 +366,8 @@ export type PLATFORM_ID =
   | "HumanIdKyc"
   | "Biometrics"
   | "Steam"
-  | "ZKEmail";
+  | "ZKEmail"
+  | "RuonID";
 
 export type PLATFORM_CATEGORY = {
   name: string;
@@ -466,7 +467,8 @@ export type PROVIDER_ID =
   | "ZKEmail#AmazonHeavyUser"
   | "ZKEmail#UberOccasionalRider"
   | "ZKEmail#UberRegularRider"
-  | "ZKEmail#UberPowerUser";
+  | "ZKEmail#UberPowerUser"
+  | "RuonID";
 
 export type StampBit = {
   bit: number;

@@ -32,6 +32,7 @@ const {
   X,
   Steam,
   ZKEmail,
+  RuonID,
 } = platforms;
 
 type CustomPlatformTypeInfo = {
@@ -152,6 +153,16 @@ if (process.env.NEXT_PUBLIC_FF_OUTDID_STAMP === "on") {
       redirectUri: process.env.NEXT_PUBLIC_PASSPORT_OUTDID_CALLBACK,
     }),
     platFormGroupSpec: Outdid.ProviderConfig,
+  });
+}
+
+if (process.env.NEXT_PUBLIC_FF_RUONID_STAMP === "on") {
+  defaultPlatformMap.set("RuonID", {
+    platform: new RuonID.RuonIDPlatform({
+      clientId: process.env.NEXT_PUBLIC_RUONID_CLIENT_ID,
+      redirectUri: process.env.NEXT_PUBLIC_PASSPORT_RUONID_CALLBACK,
+    }),
+    platFormGroupSpec: RuonID.ProviderConfig,
   });
 }
 
