@@ -300,8 +300,7 @@ router.get("/ruonid/qr", (req: Request, res: Response): void => {
 // Step 3: RuonID app POSTs the verification result here
 router.post("/ruonid/callback", (req: Request, res: Response): void => {
   ruonidHandleCallback(req.body)
-    .then(({ frontendRedirect }) => {
-      // Respond to the RuonID app with success
+    .then(() => {
       res.status(200).send({ success: true });
     })
     .catch((error) => {

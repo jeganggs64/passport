@@ -72,7 +72,7 @@ export const handleCallback = async (body: unknown): Promise<void> => {
     appSpecificId: result.appSpecificId,
     identityTier: result.identityTier ?? "unknown",
     deviceVerified: result.deviceVerified ?? false,
-    receipt: result.receipt ?? {},
+    receipt: (result.receipt ?? {}) as Record<string, unknown>,
   };
 };
 
